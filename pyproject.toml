@@ -1,0 +1,14 @@
+[project]
+name = "steam"
+version = "0.1.0"
+description = "MCP steam project"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "beautifulsoup4>=4.13.4",
+    "mcp[cli]>=1.7.0",
+    "requests>=2.32.3",
+]
+
+[tool.uv]
+managed = true

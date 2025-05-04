@@ -1,14 +1,25 @@
 [project]
-name = "steam"
+name = "steam-mcp-server"
 version = "0.1.0"
-description = "MCP steam project"
+description = "Simple MCP steam server"
 readme = "README.md"
 requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [{ name = "Flugel (Oskar Oleksandr Kobel)", email = "oskar.oleksandr.kobel@gmail.com" }]
 dependencies = [
     "beautifulsoup4>=4.13.4",
     "mcp[cli]>=1.7.0",
     "requests>=2.32.3",
 ]
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+steam-mcp-server = "steam_mcp_server:main"
+
 [tool.uv]
 managed = true
+package = true
+
+

@@ -245,5 +245,8 @@ def fetch_steam_guide(guide_id: str) -> str:
         print(f"Error in fetch_steam_guide: {e}", file=sys.stderr)
         return f"Error fetching guide: {e}"
 
+def main():
+    mcp.run(transport="stdio")
+
 if __name__ == "__main__":
-    mcp.run(transport="sse")
+    main()

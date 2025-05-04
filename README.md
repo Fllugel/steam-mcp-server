@@ -24,23 +24,10 @@ To use the Steam MCP Server, you need the following:
 
 ## Installation
 
-To use this project, follow these steps:
-
-1. Clone the repository and navigate to the project folder:
-   ```bash
-   git clone https://github.com/Fllugel/steam-mcp-server
-   cd steam-mcp-server
-   ```
-
-2. Synchronize the environment using `uv`:
-   ```bash
-   uv sync
-   ```
-
-3. Install the project in editable mode:
-   ```bash
-   uv pip install -e .
-   ```
+To use this project, clone the repository and navigate to the project folder:
+```bash
+git clone https://github.com/Fllugel/steam-mcp-server
+```
 
 ## Usage
 

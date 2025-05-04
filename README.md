@@ -44,9 +44,9 @@ To use this project, follow these steps:
 
 ## Usage
 
-You can run the server to connect it via STDIO, using the following command:
+You can run the server to connect it to any mcp supported client via STDIO, using the following command:
 ```bash
-uv run steam-mcp-server
+uv run --directory PATH/TO/YOUR/steam-mcp-server run steam-mcp-server
 ```
 
 ## Adding to Claude

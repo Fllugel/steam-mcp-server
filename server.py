@@ -5,6 +5,9 @@ import os
 from bs4 import BeautifulSoup
 import re
 
+from dotenv import load_dotenv
+load_dotenv()
+
 API_KEY = os.environ.get('API_KEY')
 STEAM_ID = os.environ.get('STEAM_ID')
 

@@ -16,9 +16,11 @@ To use the Steam MCP Server, you need the following:
    Obtain your Steam API key from the [Steam API Key Registration page](https://steamcommunity.com/dev/apikey).  
    This key is required to interact with Steam's web API.
 
-2. **Steam User ID**:  
-   Retrieve your Steam User ID, which is necessary for certain API operations. You can find it in your Steam profile URL in steam client if you open your profile.
-    ![Where to find your Steam profile URL](assets/steam-profile-url.png)
+   2. **Steam User ID**:  
+   Retrieve your Steam User ID, which is necessary for certain API operations. 
+   You can find it in your Steam profile URL in steam client if you open your profile.
+   
+![Where to find your Steam profile URL](assets/steam-profile-url.png)
 
 ## Installation
 
@@ -26,7 +28,7 @@ To use this project, follow these steps:
 
 1. Clone the repository and navigate to the project folder:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/Fllugel/steam-mcp-server
    cd steam-mcp-server
    ```
 
@@ -42,7 +44,7 @@ To use this project, follow these steps:
 
 ## Usage
 
-Run the server using the following command:
+You can run the server to connect it via STDIO, using the following command:
 ```bash
 uv run steam-mcp-server
 ```
@@ -66,3 +68,4 @@ To add this MCP to Claude, use the following configuration:
   }
 }
 ```
+

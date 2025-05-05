@@ -4,6 +4,13 @@ import requests
 import os
 from bs4 import BeautifulSoup
 import re
+import numpy as np
+from sentence_transformers import SentenceTransformer
+
+try:
+    import faiss
+except ImportError:
+    faiss = None
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -148,15 +155,14 @@ def get_game_achievements(app_id: int) -> str:
 @mcp.tool()
 def search_steam_guides(app_id: int, query: str) -> str:
     """
-    Search top-rated Steam Community guides for a given game with specific search keywords.
+    Search top-rated Steam Community guides for a game.
 
     Args:
-        app_id (int): The Steam AppID of the game to search guides for.
-        query (str): Keywords to filter guide titles and descriptions.
+        app_id (int): The game's AppID.
+        query (str): Keywords to filter guides.
 
     Returns:
-        str: A list of up to 10 guide titles with their IDs and descriptions, or a message if none found or on error.
-
+        str: A list of up to 10 guides, each with a guide ID required for use with `fetch_steam_guide()`.
     """
     base_url = (
         f"https://steamcommunity.com/app/{app_id}/guides/?searchText={query.replace(' ', '+')}&browsefilter=toprated"
@@ -211,24 +217,34 @@ def search_steam_guides(app_id: int, query: str) -> str:
     except Exception as e:
         return f"Error searching guides for '{query}' (AppID {app_id}): {e}"
 
+# Initialize a local embedding model (no external API)
+_embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+
 @mcp.tool()
-def fetch_steam_guide(guide_id: str) -> str:
+def fetch_steam_guide(guide_id: str, query: str) -> str:
     """
-    Fetch the full content of a Steam Community guide by its unique ID (GUID).
-    Use this tool after obtaining a list of guide IDs from search_steam_guides.
+    Fetch the full content of a Steam Community guide. If the content length is below
+    the threshold, return the entire guide. Otherwise, perform a vector search over
+    guide sections for the provided query and return only the most relevant sections.
 
     Args:
-        guide_id (str): The unique Steam guide ID (GUID) as returned by search_steam_guides.
+        guide_id (str): The Steam guide ID.
+        query (str): Search query to retrieve relevant content.
 
     Returns:
-        str: The guide's sections with titles and text, or an info/error message.
+        str: Full guide text (if small) or top matching sections joined by separators.
     """
+    # Configuration
+    threshold_chars = 20_000
+    top_k = 5
+
+    # Build URL and session
     url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={guide_id}"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    headers = {"User-Agent": "Mozilla/5.0"}
     session = requests.Session()
-    session.cookies.set('wants_mature_content', '1', domain='steamcommunity.com', path='/')
-    session.cookies.set('lastagecheckage', '1', domain='steamcommunity.com', path='/')
-    session.cookies.set('birthtime', '1', domain='steamcommunity.com', path='/')
+    # Bypass age check
+    for name, value in [('wants_mature_content', '1'), ('lastagecheckage', '1'), ('birthtime', '1')]:
+        session.cookies.set(name, value, domain='steamcommunity.com', path='/')
 
     try:
         resp = session.get(url, headers=headers, allow_redirects=True)
@@ -241,6 +257,7 @@ def fetch_steam_guide(guide_id: str) -> str:
         if not container:
             return f"Info: No subsections found for guide ID {guide_id}."
 
+        # Extract sections
         sections = []
         for box in container.find_all("div", class_="subSection detailBox"):
             title = box.find("div", class_="subSectionTitle")
@@ -248,13 +265,44 @@ def fetch_steam_guide(guide_id: str) -> str:
             if body:
                 for br in body.find_all("br"):
                     br.replace_with("\n")
-            sections.append(f"{title.get_text(strip=True) if title else 'Untitled'}\n{body.get_text('\n', strip=True) if body else ''}")
+            text = (title.get_text(strip=True) + "\n") if title else ""
+            text += (body.get_text("\n", strip=True) if body else '')
+            sections.append(text)
 
-        return "\n\n".join(sections)
+        full_text = "\n\n".join(sections)
+
+        # If small enough, return full text
+        if len(full_text) <= threshold_chars:
+            return full_text
+
+        # Ensure FAISS is installed
+        if faiss is None:
+            return "Error: FAISS library is required for large-guide search but is not installed."
+
+        # Compute embeddings locally
+        embeddings = _embedding_model.encode(sections, convert_to_numpy=True)
+
+        # Build FAISS index
+        dim = embeddings.shape[1]
+        index = faiss.IndexFlatL2(dim)
+        index.add(np.array(embeddings, dtype='float32'))
+
+        # Embed query locally
+        q_emb = _embedding_model.encode([query], convert_to_numpy=True)[0].astype('float32')
+        distances, indices = index.search(q_emb.reshape(1, -1), top_k)
+
+        # Collect top sections
+        results = []
+        for dist, idx in zip(distances[0], indices[0]):
+            results.append(f"[Score: {dist:.2f}]\n{sections[idx]}")
+
+        # Return joined relevant sections
+        return "\n\n---\n\n".join(results)
 
     except Exception as e:
         print(f"Error in fetch_steam_guide: {e}", file=sys.stderr)
         return f"Error fetching guide: {e}"
+
 
 def main():
     mcp.run(transport="stdio")

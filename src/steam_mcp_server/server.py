@@ -17,6 +17,9 @@ mcp = FastMCP("steam", port="8099")
 def get_owned_games() -> str:
     """
     Retrieve a formatted list of all games owned by a Steam user.
+
+    Returns:
+        str: A summary of owned games with their AppIDs and playtimes.
     """
     try:
         if not API_KEY or not STEAM_ID:
@@ -47,6 +50,9 @@ def get_owned_games() -> str:
 def get_recently_played_games() -> str:
     """
     Fetch the list of games a user has played in the past two weeks.
+
+    Returns:
+        str: A list of recently played games.
     """
     try:
         if not API_KEY or not STEAM_ID:
@@ -76,10 +82,13 @@ def get_recently_played_games() -> str:
 @mcp.tool()
 def get_game_achievements(app_id: int) -> str:
     """
-    Retrieve achievement information for a specific Steam game. Returns a list of achievements, their unlock status and global unlock rates.
+    Retrieve achievement information for a specific Steam game, including user unlock status and global percentages.
 
     Args:
-        app_id: The AppID of the game to fetch achievements for.
+        app_id (int): The AppID of the game to fetch achievements for.
+
+    Returns:
+        str: A list of achievements with names, unlock status, and global unlock rates, or a message if unavailable.
     """
 
     if not API_KEY or not STEAM_ID:
@@ -139,13 +148,16 @@ def get_game_achievements(app_id: int) -> str:
 @mcp.tool()
 def search_steam_guides(app_id: int, query: str) -> str:
     """
-    Search top-rated Steam Community guides for a game and keyword.
+    Search top-rated Steam Community guides for a given game with specific search keywords.
 
     Args:
-        app_id: The AppID of the game to search guides for.
-        query: Search keywords to filter guide titles and descriptions.
-    """
+        app_id (int): The Steam AppID of the game to search guides for.
+        query (str): Keywords to filter guide titles and descriptions.
 
+    Returns:
+        str: A list of up to 10 guide titles with their IDs and descriptions, or a message if none found or on error.
+
+    """
     base_url = (
         f"https://steamcommunity.com/app/{app_id}/guides/?searchText={query.replace(' ', '+')}&browsefilter=toprated"
     )
@@ -161,56 +173,55 @@ def search_steam_guides(app_id: int, query: str) -> str:
     session.cookies.set('birthtime', '1', domain='steamcommunity.com', path='/')
 
     try:
+        # First attempt: HTML scraping
         resp = session.get(base_url, headers=headers)
-        # Handle Proceed() redirect if present
         if 'onclick="Proceed()"' in resp.text:
-            redirect = re.search(r'document\.location\s*=\s*"([^"]+)"', resp.text)
+            redirect = re.search(r'document\\.location\\s*=\\s*"([^"]+)"', resp.text)
             if redirect:
                 resp = session.get(redirect.group(1), headers=headers)
         resp.raise_for_status()
-
         soup = BeautifulSoup(resp.text, 'html.parser')
-        guides = soup.select('div.workshopItemCollectionContainer')[:5]
-        if guides:
-            header = [f"Top {len(guides)} guides for '{query}':"]
-            entries = []
-            for i, g in enumerate(guides, 1):
-                a = g.select_one('a.workshopItemCollection')
-                title = a.select_one('.workshopItemTitle').get_text(strip=True)
-                desc = a.select_one('.workshopItemShortDesc').get_text(strip=True)
-                link = a['href']
-                entries.append(f"{i}. {title}\n   {link}\n   Description: {desc}")
-            return "\n".join(header + entries)
-
-        # Fallback to JSON API
-        json_resp = session.get(json_api, headers=headers)
-        json_resp.raise_for_status()
-        data = json_resp.json()
-        html_frag = data.get('results_html', '')
-        soup = BeautifulSoup(html_frag, 'html.parser')
-        items = soup.select('a.workshopItemCollection')[:5]
+        items = soup.select('div.workshopItemCollectionContainer')[:10]
+        # Fallback: JSON API
         if not items:
-            return f"No guides found for '{query}'. Check manually: {base_url}"
-        header = [f"Top {len(items)} guides (via JSON API) for '{query}':"]
-        entries = []
-        for i, a in enumerate(items, 1):
-            title = a.select_one('.workshopItemTitle').get_text(strip=True)
-            desc = a.select_one('.workshopItemShortDesc').get_text(strip=True)
-            link = a['href']
-            entries.append(f"{i}. {title}\n   {link}\n   Description: {desc}")
-        return "\n".join(header + entries)
+            json_resp = session.get(json_api, headers=headers)
+            json_resp.raise_for_status()
+            data = json_resp.json()
+            soup = BeautifulSoup(data.get('results_html', ''), 'html.parser')
+            items = soup.select('a.workshopItemCollection')[:10]
+
+        if not items:
+            return f"No guides found for '{query}' (AppID {app_id})."
+
+        # Build formatted output
+        lines = [f"Top {len(items)} guides for '{query}':"]
+        for idx, el in enumerate(items, start=1):
+            link = el.select_one('a.workshopItemCollection')['href']
+            match = re.search(r'id=(\d+)', link)
+            guide_id = match.group(1) if match else link
+            title = el.select_one('.workshopItemTitle').get_text(strip=True)
+            desc = el.select_one('.workshopItemShortDesc').get_text(strip=True)
+            lines.append(
+                f"{idx}. ID: {guide_id}\n"
+                f"   Name: {title}\n"
+                f"   Description: {desc}"
+            )
+        return "\n".join(lines)
 
     except Exception as e:
-        print(f"Error in search_steam_guides: {e}", file=sys.stderr)
-        return f"Error searching guides: {e}\nURL: {base_url}"
+        return f"Error searching guides for '{query}' (AppID {app_id}): {e}"
 
 @mcp.tool()
 def fetch_steam_guide(guide_id: str) -> str:
     """
-    Fetch the full content of a Steam Community guide by its ID.
+    Fetch the full content of a Steam Community guide by its unique ID (GUID).
+    Use this tool after obtaining a list of guide IDs from search_steam_guides.
 
     Args:
-        guide_id: The unique Steam guide ID.
+        guide_id (str): The unique Steam guide ID (GUID) as returned by search_steam_guides.
+
+    Returns:
+        str: The guide's sections with titles and text, or an info/error message.
     """
     url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={guide_id}"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
@@ -228,7 +239,7 @@ def fetch_steam_guide(guide_id: str) -> str:
         soup = BeautifulSoup(resp.text, "html.parser")
         container = soup.find("div", class_="guide subSections")
         if not container:
-            return "Info: No subsections found for guide ID {guide_id}."
+            return f"Info: No subsections found for guide ID {guide_id}."
 
         sections = []
         for box in container.find_all("div", class_="subSection detailBox"):

@@ -217,7 +217,6 @@ def search_steam_guides(app_id: int, query: str) -> str:
     except Exception as e:
         return f"Error searching guides for '{query}' (AppID {app_id}): {e}"
 
-# Initialize a local embedding model (no external API)
 _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 @mcp.tool()
@@ -235,7 +234,7 @@ def fetch_steam_guide(guide_id: str, query: str) -> str:
         str: Full guide text (if small) or top matching sections joined by separators.
     """
     # Configuration
-    threshold_chars = 20_000
+    threshold_chars = 20000
     top_k = 5
 
     # Build URL and session
